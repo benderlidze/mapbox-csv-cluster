@@ -47,8 +47,8 @@
                     console.log('geojson', geojson);
                     const markers = geojson.features.filter(d => d.geometry && d.geometry.type === "Point")
                     console.log('markers', markers);
-                    // const collection = { type: 'FeatureCollection', features: markers }
-                    // map.getSource('pins').setData(collection)
+                    const collection = { type: 'FeatureCollection', features: markers }
+                    map.getSource('earthquakes').setData(collection)
                 })
 
 
@@ -56,10 +56,10 @@
             // set the 'cluster' option to true. GL-JS will
             // add the point_count property to your source data.
             map.addSource('earthquakes', {
-                type: 'geojson',
                 // Point to GeoJSON data. This example visualizes all M1.0+ earthquakes
                 // from 12/22/15 to 1/21/16 as logged by USGS' Earthquake hazards program.
-                data: 'map.geojson',
+                'type': 'geojson',
+                'data': { type: 'FeatureCollection', features: Array(0) },
                 cluster: true,
                 clusterMaxZoom: 14, // Max zoom to cluster points on
                 clusterRadius: 50 // Radius of each cluster when clustering points (defaults to 50)
@@ -115,7 +115,7 @@
                 source: 'earthquakes',
                 filter: ['!', ['has', 'point_count']],
                 paint: {
-                    'circle-color': 'red',
+                    'circle-color': ['get','icon-color'],
                     'circle-radius': 6,
                     'circle-stroke-width': 1,
                     'circle-stroke-color': '#fff'
@@ -148,7 +148,7 @@
             map.on('click', 'unclustered-point', (e) => {
                 const coordinates = e.features[0].geometry.coordinates.slice();
                 const mag = e.features[0];
-                console.log('mag', mag);
+                console.log('mag', e.features);
                 const tsunami =
                     e.features[0].properties.tsunami === 1 ? 'yes' : 'no';
 
