@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Create and style clusters</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
+    <script src="https://unpkg.com/@tmcw/togeojson@5.6.0/dist/togeojson.umd.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #filters {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="filters"></div>
+    <div id="map"></div>
+
+    <script>
+        const filtersDiv = document.getElementById('filters');
+
+        const Filtres = (setArr) => {
+            const filters = new Map();
+            const addFilterItem = (name) => {
+                filters.set(name, true)
+            }
+            const buildFilters = (callback) => {
+                const container = document.createElement('div');
+                filters.forEach((val, key) => {
+
+                    const div = document.createElement('div');
+                    const checkbox = document.createElement('input')
+                    checkbox.type = 'checkbox'
+                    checkbox.value = val
+                    checkbox.checked = true
+                    checkbox.addEventListener("change", () => {
+                        filters.set(key, checkbox.checked)
+                        if (typeof callback === 'function') callback(filters)
+                    })
+                    div.appendChild(checkbox)
+
+                    const text = document.createTextNode(key)
+                    div.appendChild(text)
+
+                    container.appendChild(div);
+                })
+                return container
+            }
+            return Object.freeze({
+                filters,
+                addFilterItem,
+                buildFilters
+            })
+        }
+        const main = Filtres()
+
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlcnQiLCJhIjoiY2s3bHNtdjF2MDJ1eTNmcGowanU5MHR4ZiJ9.hzhWj9bhgD5itpWAPc3nNA';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: [-103.5917, 40.6699],
+            zoom: 3,
+            projection: "mercator"
+        });
+
+        map.on('load', () => {
+
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vT0nymeGgneA1Di3rtUJRzHOdqbJM0_aGj-vXRRR2z2I9AJRTttc-4GPYyWgtZQRJD9QJyXgUwOgNGj/pub?output=csv")
+                .then(data => {
+                    const markers = data.map(d => {
+                        main.addFilterItem(d['Category/Filter'], true)
+                        return {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [+d.lon, d.lat]
+                            },
+                            properties: {
+                                ...d
+                            }
+                        }
+                    })
+
+                    const collection = { type: 'FeatureCollection', features: markers }
+                    map.getSource('earthquakes').setData(collection)
+
+                    filtersDiv.appendChild(main.buildFilters((filters) => {
+                        const collection = {
+                            type: 'FeatureCollection', features: markers.filter(d => {
+                                return filters.get(d.properties['Category/Filter'])
+                            })
+                        }
+                        map.getSource('earthquakes').setData(collection)
+                        console.log(filters, collection);
+                    }))
+                })
+
+            // Add a new source from our GeoJSON data and
+            // set the 'cluster' option to true. GL-JS will
+            // add the point_count property to your source data.
+            map.addSource('earthquakes', {
+                // Point to GeoJSON data. This example visualizes all M1.0+ earthquakes
+                // from 12/22/15 to 1/21/16 as logged by USGS' Earthquake hazards program.
+                'type': 'geojson',
+                'data': { type: 'FeatureCollection', features: Array(0) },
+                cluster: true,
+                clusterMaxZoom: 14, // Max zoom to cluster points on
+                clusterRadius: 50 // Radius of each cluster when clustering points (defaults to 50)
+            });
+
+            map.addLayer({
+                id: 'clusters',
+                type: 'circle',
+                source: 'earthquakes',
+                filter: ['has', 'point_count'],
+                paint: {
+                    // Use step expressions (https://docs.mapbox.com/mapbox-gl-js/style-spec/#expressions-step)
+                    // with three steps to implement three types of circles:
+                    //   * Blue, 20px circles when point count is less than 100
+                    //   * Yellow, 30px circles when point count is between 100 and 750
+                    //   * Pink, 40px circles when point count is greater than or equal to 750
+                    'circle-color': [
+                        'step',
+                        ['get', 'point_count'],
+                        '#51bbd6',
+                        100,
+                        '#f1f075',
+                        750,
+                        '#f28cb1'
+                    ],
+                    'circle-radius': [
+                        'step',
+                        ['get', 'point_count'],
+                        20,
+                        100,
+                        30,
+                        750,
+                        40
+                    ]
+                }
+            });
+
+            map.addLayer({
+                id: 'cluster-count',
+                type: 'symbol',
+                source: 'earthquakes',
+                filter: ['has', 'point_count'],
+                layout: {
+                    'text-field': ['get', 'point_count_abbreviated'],
+                    'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+                    'text-size': 12
+                }
+            });
+
+            map.addLayer({
+                id: 'unclustered-point',
+                type: 'circle',
+                source: 'earthquakes',
+                filter: ['!', ['has', 'point_count']],
+                paint: {
+                    'circle-color': ['get', 'icon-color'],
+                    'circle-radius': 6,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+
+            // inspect a cluster on click
+            map.on('click', 'clusters', (e) => {
+                const features = map.queryRenderedFeatures(e.point, {
+                    layers: ['clusters']
+                });
+                const clusterId = features[0].properties.cluster_id;
+                map.getSource('earthquakes').getClusterExpansionZoom(
+                    clusterId,
+                    (err, zoom) => {
+                        if (err) return;
+
+                        map.easeTo({
+                            center: features[0].geometry.coordinates,
+                            zoom: zoom
+                        });
+                    }
+                );
+            });
+
+            // When a click event occurs on a feature in
+            // the unclustered-point layer, open a popup at
+            // the location of the feature, with
+            // description HTML from its properties.
+            map.on('click', 'unclustered-point', (e) => {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const prop = e.features[0].properties
+
+                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                }
+                console.log('prop', prop);
+                const descr = `
+                    <h1>${prop['NAME']}</h1>
+                    ${prop['Category/Filter']}
+
+                `
+                new mapboxgl.Popup()
+                    .setLngLat(coordinates)
+                    .setHTML(descr)
+                    .addTo(map);
+            });
+
+            map.on('mouseenter', 'unclustered-point', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'unclustered-point', () => {
+                map.getCanvas().style.cursor = '';
+            });
+            map.on('mouseenter', 'clusters', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'clusters', () => {
+                map.getCanvas().style.cursor = '';
+            });
+        });
+
+
+
+
+    </script>
+
+</body>
+
+</html>
