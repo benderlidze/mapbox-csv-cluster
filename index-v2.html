@@ -222,10 +222,20 @@
                     coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
                 }
                 console.log('prop', prop);
+                console.log('prop[]', prop['gx_media_links']);
+
+                let imagesList = '';
+                const images = prop['gx_media_links'].split(" ")
+                if (images.length > 0) {
+                    imagesList = images.map(d=>{
+                        return `<div><a target="_blank" href="${d}"><img src="${d}" style="width:100px"></a></div>`
+                    }).join("")
+                }
+
                 const descr = `
                     <h1>${prop['NAME']}</h1>
                     ${prop['Category/Filter']}
-
+                    ${imagesList}
                 `
                 new mapboxgl.Popup()
                     .setLngLat(coordinates)
