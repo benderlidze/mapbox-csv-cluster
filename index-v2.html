@@ -85,7 +85,8 @@
             style: 'mapbox://styles/mapbox/light-v11',
             center: [-103.5917, 40.6699],
             zoom: 3,
-            projection: "mercator"
+            // projection: "mercator",
+            projection: 'globe', // Display the map as a globe, since satellite-v9 defaults to Mercator
         });
 
         map.on('load', () => {
